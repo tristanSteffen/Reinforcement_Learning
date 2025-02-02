@@ -5,20 +5,19 @@ import random
 
 def train_agent_self_play(p1, p2, env, num_episodes=50000):
     for episode in range(num_episodes):
-        # Print training progress and adjust hyperparameters every 1000 episodes
+        if episode % 500 == 0:
+            p1.epsilon = max(p1.epsilon * 0.9, 0.1)
+            p2.epsilon = max(p2.epsilon * 0.9, 0.1)
+            p1.update_epsilon(p1.epsilon)
+            p2.update_epsilon(p2.epsilon)
+            p2.update_target_network()
+            
         if episode % 1000 == 0:
-            p1.lr = max(p1.lr * 0.9, 0.001)
-            p1.update_learning_rate(p1.lr)
-            p2.update_target_network()  # Sync p2 with p1 periodically
-            print(f"Episode {episode}/{num_episodes} | lr={p1.lr:.4f} | epsilon={p1.epsilon:.4f}")
+            print(f"Episode {episode}/{num_episodes} | lr={p1.lr:.6f} | epsilon={p1.epsilon:.4f}")
             print(f"\n--- Testing Agent at Episode {episode} ---")
             test_agent(p1, env, n_games=100, opponent="random")
             print("-------------------------------\n")
-            if episode >= 10000:
-                p1.epsilon = max(p1.epsilon * 0.9, 0.01)
-                p2.epsilon = max(p2.epsilon * 0.9, 0.01)
-                p1.update_epsilon(p1.epsilon)
-                p2.update_epsilon(p2.epsilon)
+        
 
 
         # Rest of the training logic remains the same
@@ -156,7 +155,7 @@ def _get_rewards(winner, p1_symbol=1):
       - if winner= 0 => a draw: partial reward
     """
     if winner == p1_symbol:
-        return (1, 0)
+        return (1, -1)
     elif winner == 0:
         # e.g. p1 gets 0.1, p2 gets 0.5 -- or pick your own
         return (0.1, 0.1)
@@ -170,9 +169,9 @@ if __name__ == "__main__":
 
     # 1) Self-play training
     env = TicTacToe()
-    p1 = DQNAgent(lr=0.01, gamma=1)
-    p2 = DQNAgent(lr=0.01, gamma=1)
-    train_agent_self_play(p1, p2, env, num_episodes=50000)
+    p1 = DQNAgent()
+    p2 = DQNAgent()
+    train_agent_self_play(p1, p2, env, num_episodes=10000)
 
     # Load an agent and test it vs random:
     test_agent(p1, env, n_games=1000, opponent="random")

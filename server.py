@@ -6,7 +6,7 @@ app = Flask(__name__, static_folder="static", static_url_path="")
 
 # Initialize DQNAgent and load trained model
 agent = DQNAgent()
-agent.load("policy_p1.pt")  # Use .pt extension for PyTorch models
+agent.load("policy_p2.pt")  # Use .pt extension for PyTorch models
 
 @app.route("/")
 def serve_index():

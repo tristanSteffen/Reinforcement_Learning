@@ -6,17 +6,19 @@ import numpy as np
 from collections import deque
 
 class DQNNetwork(nn.Module):
-    def __init__(self, state_size=9, action_size=9, hidden_size=45):
+    def __init__(self, state_size=9, action_size=9, hidden_size=32):
         super(DQNNetwork, self).__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, action_size)
+        self.fc3 = nn.Linear(hidden_size, hidden_size)
+        self.fc4 = nn.Linear(hidden_size, action_size)
 
     def forward(self, x):
         # x shape: [batch_size, state_size]
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        return self.fc3(x)  # returns Q-values for each action (shape [batch_size, 9])
+        x = torch.relu(self.fc3(x))
+        return self.fc4(x)  # returns Q-values for each action (shape [batch_size, 9])
 
 class DQNAgent:
     """
@@ -30,9 +32,9 @@ class DQNAgent:
         state_size=9,
         action_size=9,
         hidden_size=64,
-        lr=1e-3,  # Learning rate
-        gamma=0.85,  # Discount factor
-        epsilon=1.0,  # Exploration rate
+        lr=1e-4,  # Learning rate
+        gamma=1,  # Discount factor
+        epsilon=0.99,  # Exploration rate
         batch_size=64,  # Batch size for replay
         max_memory=50000  # Max size of replay memory
     ):
@@ -93,52 +95,41 @@ class DQNAgent:
             return action
 
     def replay(self, batch_size=None):
-        """Sample a mini-batch from memory and train the network."""
+        """Vectorized replay implementation for faster processing"""
         if batch_size is None:
             batch_size = self.batch_size
 
         if len(self.memory) < batch_size:
-            return  # Not enough data to train
+            return
 
+        # Vectorized batch processing
         batch = random.sample(self.memory, batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
 
-        states, targets = [], []
-        for state, action, reward, next_state, done in batch:
-            state_t = torch.FloatTensor(state)
-            next_state_t = torch.FloatTensor(next_state)
+        # Convert to tensors in bulk
+        states_t = torch.stack([torch.FloatTensor(s) for s in states])
+        next_states_t = torch.stack([torch.FloatTensor(s) for s in next_states])
+        rewards_t = torch.FloatTensor(rewards)
+        actions_t = torch.LongTensor(actions)
+        dones_t = torch.BoolTensor(dones)
 
-            # Current Q-values (from policy net)
-            current_q = self.policy_net(state_t.unsqueeze(0))[0]
+        # Get current Q values for all states
+        current_q = self.policy_net(states_t)
 
-            # We'll copy them to form our training target
-            target_q = current_q.clone().detach()
+        # Calculate target Q values using vector operations
+        with torch.no_grad():
+            next_q = self.target_net(next_states_t).max(1)[0]
+            target_q = rewards_t + (1 - dones_t.float()) * self.gamma * next_q
 
-            if done:
-                # If terminal, target is just the reward
-                target_q[action] = reward
-            else:
-                # use target_net for stability
-                with torch.no_grad():
-                    next_q = self.target_net(next_state_t.unsqueeze(0))[0]
-                target_q[action] = reward + self.gamma * torch.max(next_q)
+        # Only update the actions that were taken
+        target = current_q.clone()
+        target[range(batch_size), actions_t] = target_q
 
-            states.append(state_t)
-            targets.append(target_q)
-
-        # Stack
-        states_t = torch.stack(states)   # shape [batch_size, 9]
-        targets_t = torch.stack(targets) # shape [batch_size, 9]
-
-        # Forward pass
-        predictions = self.policy_net(states_t)
-
-        # Compute loss
-        loss = self.loss_fn(predictions, targets_t)
-
-        # Backprop
+        # Calculate loss and optimize
+        loss = self.loss_fn(current_q, target)
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), max_norm=1.0) #Clip gradients during backpropagation to avoid Eploding gradients
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1.0)
         self.optimizer.step()
 
     def update_target_network(self):
