@@ -32,7 +32,7 @@ class DQNAgent:
         state_size=9,
         action_size=9,
         hidden_size=64,
-        lr=1e-4,  # Learning rate
+        lr=2e-5,  # Learning rate
         gamma=1,  # Discount factor
         epsilon=0.99,  # Exploration rate
         batch_size=64,  # Batch size for replay

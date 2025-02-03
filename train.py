@@ -171,7 +171,7 @@ if __name__ == "__main__":
     env = TicTacToe()
     p1 = DQNAgent()
     p2 = DQNAgent()
-    train_agent_self_play(p1, p2, env, num_episodes=10000)
+    train_agent_self_play(p1, p2, env, num_episodes=100000)
 
     # Load an agent and test it vs random:
     test_agent(p1, env, n_games=1000, opponent="random")
