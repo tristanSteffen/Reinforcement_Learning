@@ -6,7 +6,7 @@ import numpy as np
 from collections import deque
 
 class DQNNetwork(nn.Module):
-    def __init__(self, state_size=9, action_size=9, hidden_size=32):
+    def __init__(self, state_size=9, action_size=9, hidden_size=64):
         super(DQNNetwork, self).__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
@@ -31,10 +31,9 @@ class DQNAgent:
         self,
         state_size=9,
         action_size=9,
-        hidden_size=64,
-        lr=2e-5,  # Learning rate
-        gamma=1,  # Discount factor
-        epsilon=0.99,  # Exploration rate
+        lr=1e-3,  # Learning rate
+        gamma=0.99,  # Discount factor
+        epsilon=1,  # Exploration rate
         batch_size=64,  # Batch size for replay
         max_memory=50000  # Max size of replay memory
     ):
@@ -51,18 +50,14 @@ class DQNAgent:
         self.memory = deque(maxlen=max_memory)
 
         # Two networks: policy and target
-        self.policy_net = DQNNetwork(state_size, action_size, hidden_size)
-        self.target_net = DQNNetwork(state_size, action_size, hidden_size)
+        self.policy_net = DQNNetwork()
+        self.target_net = DQNNetwork()
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
         # Initialize optimizer with the provided learning rate
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=self.lr)
         self.loss_fn = nn.MSELoss()
-
-    def remember(self, state, action, reward, next_state, done):
-        """Store the transition in replay memory."""
-        self.memory.append((state, action, reward, next_state, done))
 
     def act(self, state, valid_actions=None):
         """
@@ -91,46 +86,46 @@ class DQNAgent:
                 action = int(np.argmax(masked_q))
             else:
                 action = int(np.argmax(q_values))
-            # print(q_values)
             return action
-
+        
+    def remember(self, state, action, reward, next_state, done):
+        """Store the transition in replay memory."""
+        self.memory.append((state, action, reward, next_state, done))
+        
     def replay(self, batch_size=None):
-        """Vectorized replay implementation for faster processing"""
+        """Trainiert das DQN mit Experience Replay und der Bellman-Formel."""
         if batch_size is None:
             batch_size = self.batch_size
 
         if len(self.memory) < batch_size:
-            return
+            return  # Nicht genug gespeicherte Erlebnisse, daher kein Training
 
-        # Vectorized batch processing
+        # Zufällige Stichprobe von Erfahrungen aus dem Replay Buffer
         batch = random.sample(self.memory, batch_size)
         states, actions, rewards, next_states, dones = zip(*batch)
 
-        # Convert to tensors in bulk
-        states_t = torch.stack([torch.FloatTensor(s) for s in states])
-        next_states_t = torch.stack([torch.FloatTensor(s) for s in next_states])
-        rewards_t = torch.FloatTensor(rewards)
-        actions_t = torch.LongTensor(actions)
-        dones_t = torch.BoolTensor(dones)
+        # Umwandlung der Listen in Tensoren für effizientere Berechnungen
+        states_t = torch.FloatTensor(np.array(states))
+        next_states_t = torch.FloatTensor(np.array(next_states))
+        rewards_t = torch.FloatTensor(rewards).unsqueeze(1)  # Belohnung als Spaltenvektor
+        actions_t = torch.LongTensor(actions).unsqueeze(1)   # Aktionen als Spaltenvektor
+        dones_t = torch.FloatTensor(dones).unsqueeze(1)      # Boolean-Werte für Endzustände
 
-        # Get current Q values for all states
-        current_q = self.policy_net(states_t)
+        # 1️⃣ **Berechnung von Q(s, a)**
+        # Hole Q-Werte für die gewählten Aktionen
+        current_q = self.policy_net(states_t).gather(1, actions_t)
 
-        # Calculate target Q values using vector operations
-        with torch.no_grad():
-            next_q = self.target_net(next_states_t).max(1)[0]
-            target_q = rewards_t + (1 - dones_t.float()) * self.gamma * next_q
+        # 2️⃣ **Anwendung der Bellman-Gleichung**
+        with torch.no_grad():  # Deaktiviert Gradientenberechnung, da wir nur Werte berechnen
+            next_q = self.target_net(next_states_t).min(1, keepdim=True)[0]  # max Q(s', a')
+            target_q = rewards_t + (1 - dones_t) * self.gamma * next_q  # Bellman-Update
 
-        # Only update the actions that were taken
-        target = current_q.clone()
-        target[range(batch_size), actions_t] = target_q
-
-        # Calculate loss and optimize
-        loss = self.loss_fn(current_q, target)
+        # 3️⃣ **Berechnung des Verlusts & Optimierung**
+        loss = self.loss_fn(current_q, target_q)  # MSE-Loss zwischen aktuellem und Ziel-Q-Wert
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1.0)
-        self.optimizer.step()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), 1.0)  # Verhindert zu große Updates
+        self.optimizer.step()  # Parameter-Update
 
     def update_target_network(self):
         """Copy policy_net weights to target_net."""

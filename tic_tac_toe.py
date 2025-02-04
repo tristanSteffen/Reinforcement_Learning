@@ -48,16 +48,16 @@ class TicTacToe:
         self.check_winner()
         if self.done:
             if self.winner == 1:
-                return self.get_state(), 1, True
+                return self.get_state(), 5, True
             elif self.winner == -1:
-                return self.get_state(), -1, True
+                return self.get_state(), -2, True
             else:
                 # Draw
-                return self.get_state(), 0, True
+                return self.get_state(), 0.5, True
         else:
             # Switch player: 1 -> -1, -1 -> 1
             self.current_player = -1 if self.current_player == 1 else 1
-            return self.get_state(), 0, False
+            return self.get_state(), -0.1, False
 
     def check_winner(self):
         """

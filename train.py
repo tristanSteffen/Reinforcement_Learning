@@ -10,12 +10,15 @@ def train_agent_self_play(p1, p2, env, num_episodes=50000):
             p2.epsilon = max(p2.epsilon * 0.9, 0.1)
             p1.update_epsilon(p1.epsilon)
             p2.update_epsilon(p2.epsilon)
+            new_lr = max(p1.lr * 0.95, 5e-5)
+            p1.update_learning_rate(new_lr)
+            p2.update_learning_rate(new_lr)
             p2.update_target_network()
             
         if episode % 1000 == 0:
             print(f"Episode {episode}/{num_episodes} | lr={p1.lr:.6f} | epsilon={p1.epsilon:.4f}")
             print(f"\n--- Testing Agent at Episode {episode} ---")
-            test_agent(p1, env, n_games=100, opponent="random")
+            test_agent(p1, env, n_games=1000, opponent="random")
             print("-------------------------------\n")
         
 
@@ -171,7 +174,7 @@ if __name__ == "__main__":
     env = TicTacToe()
     p1 = DQNAgent()
     p2 = DQNAgent()
-    train_agent_self_play(p1, p2, env, num_episodes=100000)
+    train_agent_self_play(p1, p2, env, num_episodes=50000)
 
     # Load an agent and test it vs random:
     test_agent(p1, env, n_games=1000, opponent="random")
