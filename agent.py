@@ -10,15 +10,13 @@ class DQNNetwork(nn.Module):
         super(DQNNetwork, self).__init__()
         self.fc1 = nn.Linear(state_size, hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size)
-        self.fc4 = nn.Linear(hidden_size, action_size)
+        self.fc3 = nn.Linear(hidden_size, action_size)
 
     def forward(self, x):
         # x shape: [batch_size, state_size]
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        return self.fc4(x)  # returns Q-values for each action (shape [batch_size, 9])
+        return self.fc3(x)  # returns Q-values for each action (shape [batch_size, 9])
 
 class DQNAgent:
     """
@@ -31,10 +29,10 @@ class DQNAgent:
         self,
         state_size=9,
         action_size=9,
-        lr=1e-3,  # Learning rate
-        gamma=0.99,  # Discount factor
+        lr=1e-4,  # Learning rate
+        gamma=0.8,  # Discount factor
         epsilon=1,  # Exploration rate
-        batch_size=64,  # Batch size for replay
+        batch_size=512,  # Batch size for replay
         max_memory=50000  # Max size of replay memory
     ):
         self.state_size = state_size
@@ -117,8 +115,9 @@ class DQNAgent:
 
         # 2️⃣ **Anwendung der Bellman-Gleichung**
         with torch.no_grad():  # Deaktiviert Gradientenberechnung, da wir nur Werte berechnen
-            next_q = self.target_net(next_states_t).min(1, keepdim=True)[0]  # max Q(s', a')
-            target_q = rewards_t + (1 - dones_t) * self.gamma * next_q  # Bellman-Update
+            next_q_values = self.target_net(next_states_t)
+            min_next_q = next_q_values.min(1, keepdim=True)[0]  # Opponent minimizes agent's value
+            target_q = rewards_t + (1 - dones_t) * self.gamma * min_next_q
 
         # 3️⃣ **Berechnung des Verlusts & Optimierung**
         loss = self.loss_fn(current_q, target_q)  # MSE-Loss zwischen aktuellem und Ziel-Q-Wert
