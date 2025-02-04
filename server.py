@@ -20,6 +20,11 @@ def get_ai_move():
     # Convert to numpy array and reshape
     board_np = np.array(board_list, dtype=int)
     board_np[board_np == 2] = -1  # Map O to -1
+    # Check if the agent is playing as 'O' (-1)
+    current_player = 1 if board_np.sum() % 2 == 0 else -1
+
+    # Flip the board if the agent is playing as O
+    adjusted_board = board_np * current_player
     
     # Get valid actions
     valid_actions = [i for i, val in enumerate(board_np) if val == 0]
@@ -29,7 +34,7 @@ def get_ai_move():
 
     # Get agent's action
     agent.epsilon = 0
-    action = agent.act(board_np, valid_actions=valid_actions)
+    action = agent.act(adjusted_board, valid_actions=valid_actions)
     
     return jsonify({"action": int(action)})
 
