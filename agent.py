@@ -30,7 +30,7 @@ class DQNAgent:
         state_size=9,
         action_size=9,
         lr=1e-4,  # Learning rate
-        gamma=0.8,  # Discount factor
+        gamma=0.99,  # Discount factor
         epsilon=1,  # Exploration rate
         batch_size=512,  # Batch size for replay
         max_memory=50000  # Max size of replay memory
@@ -88,7 +88,12 @@ class DQNAgent:
         
     def remember(self, state, action, reward, next_state, done):
         """Store the transition in replay memory."""
-        self.memory.append((state, action, reward, next_state, done))
+        # Invertiere den next_state um das board aus der sicht des Gegners zu erhalten.
+        # Wir tuen dies, da man beim Normalen bellmann Verfahren davon ausgeht dass man selber den nächsten
+        # move macht, und deshalb nach dem besten move im next_state berechnet. In unserem fall spielt
+        # jedoch der gegner den nächsten zug. Also betrachten wir das spielfeld aus der Position des gegners und gehen
+        # davon aus dass er den für SICH besten move mach.
+        self.memory.append((state, action, reward, -next_state, done))
         
     def replay(self, batch_size=None):
         """Trainiert das DQN mit Experience Replay und der Bellman-Formel."""
@@ -116,8 +121,8 @@ class DQNAgent:
         # 2️⃣ **Anwendung der Bellman-Gleichung**
         with torch.no_grad():  # Deaktiviert Gradientenberechnung, da wir nur Werte berechnen
             next_q_values = self.target_net(next_states_t)
-            min_next_q = next_q_values.min(1, keepdim=True)[0]  # Opponent minimizes agent's value
-            target_q = rewards_t + (1 - dones_t) * self.gamma * min_next_q
+            min_next_q = next_q_values.max(1, keepdim=True)[0]  # Opponent minimizes agent's value
+            target_q = rewards_t - (1 - dones_t) * self.gamma * min_next_q
 
         # 3️⃣ **Berechnung des Verlusts & Optimierung**
         loss = self.loss_fn(current_q, target_q)  # MSE-Loss zwischen aktuellem und Ziel-Q-Wert

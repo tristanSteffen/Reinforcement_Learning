@@ -3,16 +3,18 @@ from tic_tac_toe import TicTacToe
 from agent import DQNAgent
 import random
 
-def train_agent_self_play(p1, p2, env, num_episodes=50000):
+def train_agent_self_play(p1, p2, env, num_episodes=10000):
     for episode in range(num_episodes):
         if episode % 500 == 0:
             p1.epsilon = max(p1.epsilon * 0.9, 0.1)
             p2.epsilon = max(p2.epsilon * 0.9, 0.1)
             p1.update_epsilon(p1.epsilon)
             p2.update_epsilon(p2.epsilon)
+            
             new_lr = max(p1.lr * 0.95, 5e-5)
             p1.update_learning_rate(new_lr)
             p2.update_learning_rate(new_lr)
+            p1.update_target_network()
             p2.update_target_network()
             
         if episode % 1000 == 0:
@@ -38,9 +40,6 @@ def train_agent_self_play(p1, p2, env, num_episodes=50000):
             
             winner = env.winner
             if winner is not None:
-                reward_p1, reward_p2 = _get_rewards(winner, p1_symbol=1)
-                p1.remember(state, action, reward_p1, next_state, done)
-                p2.remember(state, action, reward_p2, next_state, done)
                 p1.replay()
                 p2.replay()
                 break
@@ -55,9 +54,6 @@ def train_agent_self_play(p1, p2, env, num_episodes=50000):
                 
                 winner = env.winner
                 if winner is not None:
-                    reward_p1, reward_p2 = _get_rewards(winner, p1_symbol=1)
-                    p1.remember(state, action, reward_p1, next_state, done)
-                    p2.remember(state, action, reward_p2, next_state, done)
                     p1.replay()
                     p2.replay()
                     break
@@ -70,36 +66,6 @@ def train_agent_self_play(p1, p2, env, num_episodes=50000):
     p2.save("policy_p2.pt")
     print("Training complete.")
 
-
-def train_agent_vs_random(agent, env, num_episodes=50000):
-    for episode in range(num_episodes):
-        if episode % 1000 == 0:
-            print(f"Episode {episode}/{num_episodes}")
-            
-        env.reset()
-        done = False
-
-        while not done:
-            # Agent's turn
-            positions = env.available_actions()  # Fixed
-            state = env.get_state()
-            action = agent.act(state, valid_actions=positions)
-            next_state, reward, done = env.step(action)  # Fixed
-            
-            agent.remember(state, action, reward, next_state, done)
-            agent.replay()
-
-            if done:
-                break
-
-            # Random opponent's turn
-            positions = env.available_actions()  # Fixed
-            if positions:
-                opp_action = random.choice(positions)
-                env.step(opp_action)  # Fixed
-
-    agent.save("policy_vs_random.pt")
-    print("Training vs random complete.")
 
 def test_agent(agent, env, n_games=1000, opponent="random"):
     original_epsilon = agent.epsilon
@@ -149,24 +115,6 @@ def test_agent(agent, env, n_games=1000, opponent="random"):
     print(f"Results: Wins={wins}, Losses={losses}, Draws={draws}")
     return wins, losses, draws
 
-
-def _get_rewards(winner, p1_symbol=1):
-    """
-    Helper to assign rewards. If p1_symbol=1, then:
-      - if winner= 1 => p1 gets +1
-      - if winner=-1 => p2 gets +1
-      - if winner= 0 => a draw: partial reward
-    """
-    if winner == p1_symbol:
-        return (1, -1)
-    elif winner == 0:
-        # e.g. p1 gets 0.1, p2 gets 0.5 -- or pick your own
-        return (0.1, 0.1)
-    else:
-        # p2 must have won
-        return (-1, 1)
-
-
 if __name__ == "__main__":
     # Example usage:
 
@@ -174,12 +122,7 @@ if __name__ == "__main__":
     env = TicTacToe()
     p1 = DQNAgent()
     p2 = DQNAgent()
-    train_agent_self_play(p1, p2, env, num_episodes=50000)
+    train_agent_self_play(p1, p2, env, num_episodes=20000)
 
     # Load an agent and test it vs random:
-    test_agent(p1, env, n_games=1000, opponent="random")
-
-    # 2) Train vs random
-    # agent_vs_random = QLearningAgent(lr=0.2, gamma=0.9, epsilon=0.3)
-    # train_agent_vs_random(agent_vs_random, env, num_episodes=10000)
-    # test_agent(agent_vs_random, env, n_games=1000, opponent="random")
+    test_agent(p1, env, n_games=10000, opponent="random")
